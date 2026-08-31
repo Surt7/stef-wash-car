@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: stef-wash-car-db
+
+    environment:
+      POSTGRES_DB: ${DB_NAME:-stef_wash_car}
+      POSTGRES_USER: ${DB_USERNAME:-stef}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
