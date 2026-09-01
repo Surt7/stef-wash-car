@@ -1,5 +1,9 @@
 package fr.stefwashcar.service.booking;
 
+import fr.stefwashcar.dto.booking.AppointmentResponse;
+import fr.stefwashcar.dto.booking.CreateReservationRequest;
+import fr.stefwashcar.dto.booking.ReservationResponse;
+import fr.stefwashcar.dto.booking.ReservationUserResponse;
 import fr.stefwashcar.enums.AppointmentStatus;
 import fr.stefwashcar.model.Appointment;
 import fr.stefwashcar.model.User;
@@ -28,33 +32,22 @@ public class ReservationService {
     private final SecureRandom random = new SecureRandom();
 
     @Transactional
-    public ResponseEntity<?> createReservation(Map<String,Object> data, String remoteIp) {
-        List<String> required = List.of(
-                "serviceId","startsAt","lastName","firstName","email",
-                "gdprConsent","isManualOverride","idempotencyKey"
-        );
-
-        List<String> missing = required.stream().filter(k -> !data.containsKey(k)).toList();
-        if (!missing.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "error","missing_fields","missing",missing
-            ));
-        }
-
-        Long serviceId = asLong(data.get("serviceId"));
-        String startsAtRaw = str(data.get("startsAt"));
-        String lastName = str(data.get("lastName"));
-        String firstName = str(data.get("firstName"));
-        String email = str(data.get("email"));
-        String phone = str(data.get("phone"));
-        boolean gdpr = bool(data.get("gdprConsent"));
-        boolean manualOverride = bool(data.get("isManualOverride"));
-        String idempotencyKey = str(data.get("idempotencyKey"));
-        String eventPublicId = str(data.get("eventPublicId"));
-        String formulePublicId = str(data.get("formulePublicId"));
+    public ResponseEntity<?> createReservation(CreateReservationRequest data, String remoteIp) {
+        Long serviceId = data.serviceId();
+        Instant startAtUtc = data.startsAt();
+        String lastName = str(data.lastName());
+        String firstName = str(data.firstName());
+        String email = str(data.email());
+        String phone = str(data.phone());
+        boolean gdpr = Boolean.TRUE.equals(data.gdprConsent());
+        boolean manualOverride = Boolean.TRUE.equals(data.isManualOverride());
+        String idempotencyKey = str(data.idempotencyKey());
+        String eventPublicId = str(data.eventPublicId());
+        String formulePublicId = str(data.formulePublicId());
 
         List<String> errors = validate(lastName, firstName, email, gdpr);
         if (idempotencyKey == null) errors.add("idempotencyKey_required");
+        if (startAtUtc == null) errors.add("startsAt_required");
 
         if (!errors.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -64,7 +57,7 @@ public class ReservationService {
 
         var existing = appointments.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
-            return ResponseEntity.ok(existing.get());
+            return ResponseEntity.ok(response(existing.get(), false));
         }
 
         var service = services.findById(serviceId != null ? serviceId : -1L).orElse(null);
@@ -88,13 +81,6 @@ public class ReservationService {
             if (formule.getService() == null || !formule.getService().getId().equals(service.getId())) {
                 return ResponseEntity.badRequest().body(Map.of("error","formule_service_mismatch"));
             }
-        }
-
-        Instant startAtUtc;
-        try {
-            startAtUtc = Instant.parse(startsAtRaw);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error","invalid_startsAt"));
         }
 
         int duration = service.getDurationMin() != null ? service.getDurationMin().intValue() : 20;
@@ -256,27 +242,29 @@ public class ReservationService {
         return errors;
     }
 
-    private Map<String,Object> response(Appointment a, boolean override) {
-        Map<String,Object> appt = new LinkedHashMap<>();
-        appt.put("id", a.getId());
-        appt.put("serviceId", a.getService() != null ? a.getService().getId() : null);
-        appt.put("formulePublicId", a.getFormule() != null ? a.getFormule().getPublicId() : null);
-        appt.put("startsAt", a.getStartAtUtc());
-        appt.put("endsAt", a.getEndAtUtc());
-        appt.put("status", a.getStatus() != null ? a.getStatus().name() : null);
-        if (override) appt.put("override", true);
+    private ReservationResponse response(Appointment appointment, boolean override) {
+        var service = appointment.getService();
+        var formule = appointment.getFormule();
+        var user = appointment.getUser();
 
-        Map<String,Object> u = new LinkedHashMap<>();
-        u.put("id", a.getUser().getId());
-        u.put("lastName", a.getUser().getLastname());
-        u.put("firstName", a.getUser().getFirstname());
-        u.put("email", a.getUser().getEmail());
+        AppointmentResponse appointmentResponse = new AppointmentResponse(
+                appointment.getId(),
+                service != null ? service.getId() : null,
+                formule != null ? formule.getPublicId() : null,
+                appointment.getStartAtUtc(),
+                appointment.getEndAtUtc(),
+                appointment.getStatus(),
+                override ? true : null
+        );
 
-        Map<String,Object> result = new LinkedHashMap<>();
-        result.put("ok", true);
-        result.put("appointment", appt);
-        result.put("user", u);
-        return result;
+        ReservationUserResponse userResponse = new ReservationUserResponse(
+                user != null ? user.getId() : null,
+                user != null ? user.getLastname() : null,
+                user != null ? user.getFirstname() : null,
+                user != null ? user.getEmail() : null
+        );
+
+        return new ReservationResponse(true, appointmentResponse, userResponse);
     }
 
     private String newToken() {
