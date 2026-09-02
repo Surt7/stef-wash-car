@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +32,10 @@ public class Service {
 
     @Column(length = 50, nullable = false)
     private String timezone = "Europe/Paris";
+
+    @Column(name = "blocks_whole_day", nullable = false)
+    @ColumnDefault("false")
+    private boolean blocksWholeDay = false;
 
     @OneToMany(mappedBy = "service")
     private List<AvailabilityRule> availabilityRules = new ArrayList<>();

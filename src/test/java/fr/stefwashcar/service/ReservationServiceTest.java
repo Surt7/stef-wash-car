@@ -13,6 +13,7 @@ import fr.stefwashcar.repository.ServiceRepository;
 import fr.stefwashcar.repository.UserRepository;
 import fr.stefwashcar.service.booking.AppointmentConfirmationMailer;
 import fr.stefwashcar.service.booking.ReservationService;
+import fr.stefwashcar.service.availability.AvailabilityService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -54,6 +55,9 @@ class ReservationServiceTest {
 
     @Mock
     private AppointmentConfirmationMailer confirmationMailer;
+
+    @Mock
+    private AvailabilityService availabilityService;
 
     @InjectMocks
     private ReservationService reservationService;
@@ -110,6 +114,8 @@ class ReservationServiceTest {
                 startAtUtc,
                 endAtUtc))
                 .thenReturn(Optional.empty());
+        when(availabilityService.isBookable(service, startAtUtc))
+                .thenReturn(true);
         when(users.findByEmail(CUSTOMER_EMAIL))
                 .thenReturn(Optional.empty());
         repositoryAssignsIdToSavedUser(7L);

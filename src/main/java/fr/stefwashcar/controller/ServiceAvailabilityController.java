@@ -3,6 +3,11 @@ package fr.stefwashcar.controller;
 import fr.stefwashcar.repository.ServiceRepository;
 import fr.stefwashcar.service.availability.AvailabilityMonthService;
 import fr.stefwashcar.service.availability.AvailabilityService;
+import fr.stefwashcar.dto.availability.DailyAvailabilityResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +31,8 @@ public class ServiceAvailabilityController {
     private final AvailabilityMonthService availabilityMonthService;
 
     @GetMapping("/{id}/availability")
+    @Operation(summary = "Consulter les créneaux disponibles d'une journée")
+    @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(implementation = DailyAvailabilityResponse.class)))
     public ResponseEntity<?> day(
             @PathVariable Long id,
             @RequestParam(required = false) String date
@@ -43,10 +50,15 @@ public class ServiceAvailabilityController {
     }
 
     @GetMapping("/{id}/availability/month")
+    @Operation(summary = "Consulter les jours disponibles d'un mois")
     public ResponseEntity<?> month(
             @PathVariable Long id,
             @RequestParam(required = false) String date
     ) {
+        if (!services.existsById(id)) {
+            return ResponseEntity.status(404).body(Map.of("error", "service_not_found"));
+        }
+
         final YearMonth ym;
         try {
             ym = YearMonth.parse(date);
@@ -66,11 +78,16 @@ public class ServiceAvailabilityController {
     }
 
     @GetMapping("/{id}/availability/range")
+    @Operation(summary = "Consulter les jours disponibles sur plusieurs mois")
     public ResponseEntity<?> range(
             @PathVariable Long id,
             @RequestParam(required = false, name = "from") String from,
             @RequestParam(defaultValue = "12") int months
     ) {
+        if (!services.existsById(id)) {
+            return ResponseEntity.status(404).body(Map.of("error", "service_not_found"));
+        }
+
         final YearMonth ym;
         try {
             ym = YearMonth.parse(from);

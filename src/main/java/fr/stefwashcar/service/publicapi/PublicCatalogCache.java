@@ -2,6 +2,8 @@ package fr.stefwashcar.service.publicapi;
 
 import fr.stefwashcar.model.Formule;
 import fr.stefwashcar.model.Service;
+import fr.stefwashcar.dto.publicapi.PublicFormuleResponse;
+import fr.stefwashcar.dto.publicapi.PublicServiceResponse;
 import fr.stefwashcar.repository.FormuleRepository;
 import fr.stefwashcar.repository.ServiceRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,9 +12,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 @org.springframework.stereotype.Service
 @RequiredArgsConstructor
@@ -24,54 +25,46 @@ public class PublicCatalogCache {
 
     @Cacheable("public-formules-active-v1")
     @Transactional(readOnly = true)
-    public List<Map<String,Object>> getActiveFormules() {
+    public List<PublicFormuleResponse> getActiveFormules() {
         return formules.findByIsActiveTrueOrderBySortOrderAscIdAsc()
-                .stream().map(this::normalizeFormule).toList();
+                .stream().map(this::toFormuleResponse).toList();
     }
 
     @Cacheable("public-services-list-v1")
     @Transactional(readOnly = true)
-    public List<Map<String,Object>> getServices() {
+    public List<PublicServiceResponse> getServices() {
         return services.findAll(Sort.by(Sort.Direction.ASC, "id"))
-                .stream().map(this::normalizeService).toList();
+                .stream().map(this::toServiceResponse).toList();
     }
 
-    private Map<String,Object> normalizeFormule(Formule f) {
-        Map<String,Object> r = new LinkedHashMap<>();
-        r.put("publicId", f.getPublicId());
-        r.put("name", f.getName());
-        r.put("priceCents", f.getPriceCents());
-        r.put("isActive", f.isActive());
-        r.put("sortOrder", f.getSortOrder());
-        r.put("description", f.getDescription());
-        r.put("code", f.getCode());
-        r.put("servicePublicId", f.getService() != null ? f.getService().getPublicId() : null);
-        r.put("imagePath", f.getImagePath());
-        r.put("startDay", f.getStartDay() != null ? f.getStartDay().format(TIME) : null);
-        r.put("endDay", f.getEndDay() != null ? f.getEndDay().format(TIME) : null);
-        r.put("duration", f.getDuration() != null ? f.getDuration().format(TIME) : null);
-        r.put("slotType", f.getSlotType());
-        r.put("pauseTime", f.getPauseTime() != null ? f.getPauseTime().format(TIME) : null);
-        r.put("appointmentsCount", f.getAppointments() != null ? f.getAppointments().size() : 0);
-
-        if (f.getColor() != null) {
-            Map<String,Object> c = new LinkedHashMap<>();
-            c.put("value", f.getColor().getValue());
-            c.put("cssClass", f.getColor().getCssClass());
-            r.put("color", c);
-        } else {
-            r.put("color", null);
-        }
-        return r;
+    @Transactional(readOnly = true)
+    public Optional<PublicFormuleResponse> getFormule(String publicId) {
+        return formules.findByPublicId(publicId).map(this::toFormuleResponse);
     }
 
-    private Map<String,Object> normalizeService(Service s) {
-        Map<String,Object> r = new LinkedHashMap<>();
-        r.put("publicId", s.getPublicId());
-        r.put("name", s.getName());
-        r.put("durationMin", s.getDurationMin());
-        r.put("capacity", s.getCapacity());
-        r.put("timezone", s.getTimezone());
-        return r;
+    public PublicFormuleResponse toFormuleResponse(Formule f) {
+        var service = f.getService();
+        var color = f.getColor() == null ? null : new PublicFormuleResponse.ColorResponse(
+                f.getColor().getValue(), f.getColor().getCssClass());
+        return new PublicFormuleResponse(
+                f.getPublicId(), f.getName(), f.getPriceCents(), f.isActive(),
+                f.getSortOrder(), f.getDescription(), f.getCode(),
+                service != null ? service.getId() : null,
+                service != null ? service.getPublicId() : null,
+                f.getImagePath(), format(f.getStartDay()), format(f.getEndDay()),
+                format(f.getDuration()), f.getSlotType(), format(f.getPauseTime()),
+                f.getAppointments() != null ? f.getAppointments().size() : 0, color
+        );
+    }
+
+    public PublicServiceResponse toServiceResponse(Service s) {
+        return new PublicServiceResponse(
+                s.getId(), s.getPublicId(), s.getName(), s.getDurationMin(),
+                s.getCapacity(), s.getTimezone()
+        );
+    }
+
+    private String format(java.time.LocalTime value) {
+        return value == null ? null : value.format(TIME);
     }
 }

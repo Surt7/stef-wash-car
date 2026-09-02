@@ -29,6 +29,9 @@ public class MainService {
     @Value("${app.mail.test-to:philippemai@yahoo.fr}")
     private String testMailTo;
 
+    @Value("${app.mail.enabled:false}")
+    private boolean mailEnabled;
+
     @Transactional
     public ResponseEntity<?> createBlackout(Map<String,Object> body) {
         Long serviceId = asLong(body.get("serviceId"));
@@ -103,6 +106,13 @@ public class MainService {
     }
 
     public ResponseEntity<?> testMail() {
+        if (!mailEnabled) {
+            return ResponseEntity.status(503).body(Map.of(
+                    "status", "disabled",
+                    "message", "L'envoi d'e-mails est désactivé (MAIL_ENABLED=false)."
+            ));
+        }
+
         try {
             MimeMessage message = mailer.createMimeMessage();
             MimeMessageHelper helper =

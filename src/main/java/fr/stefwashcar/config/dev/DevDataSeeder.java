@@ -62,14 +62,6 @@ public class DevDataSeeder {
             Service standard = findServiceByName(services, "Séance photo");
             Service wedding = findServiceByName(services, "Mariage");
 
-            /*
-             * Important for the current port:
-             * AvailabilityService still preserves the Symfony rule
-             * where service id 2 is the wedding service.
-             *
-             * On a fresh DB, standard is inserted first and wedding second,
-             * so wedding normally gets id = 2.
-             */
             if (standard == null && wedding == null && services.count() == 0) {
                 standard = createService(
                         services,
@@ -104,13 +96,9 @@ public class DevDataSeeder {
                 }
             }
 
-            if (wedding.getId() == null || wedding.getId() != 2L) {
-                log.warn(
-                        "DEV seed: 'Mariage' has id={} instead of 2. "
-                                + "The current AvailabilityService still contains "
-                                + "the legacy Symfony assumption serviceId=2.",
-                        wedding.getId()
-                );
+            if (!wedding.isBlocksWholeDay()) {
+                wedding.setBlocksWholeDay(true);
+                wedding = services.save(wedding);
             }
 
             seedStandardAvailability(availabilityRules, standard);

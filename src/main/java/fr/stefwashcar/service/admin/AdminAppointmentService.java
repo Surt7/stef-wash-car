@@ -11,6 +11,7 @@ import fr.stefwashcar.service.booking.AppointmentConfirmationMailer;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -48,7 +49,7 @@ public class AdminAppointmentService {
     private final ProviderResolver providerResolver;
     private final MailBodyRenderer renderer;
     private final AppointmentConfirmationMailer confirmationMailer;
-    private final JavaMailSender mailer;
+    private final ObjectProvider<JavaMailSender> mailerProvider;
 
     private final SecureRandom random = new SecureRandom();
 
@@ -57,6 +58,9 @@ public class AdminAppointmentService {
 
     @Value("${app.mail.archive-bcc:}")
     private String archiveBcc;
+
+    @Value("${app.mail.enabled:false}")
+    private boolean mailEnabled;
 
     public ResponseEntity<?> listAppointments(String date, Long serviceId) {
         if (date == null || date.isBlank()) {
@@ -211,6 +215,10 @@ public class AdminAppointmentService {
     }
 
     public ResponseEntity<?> sendOrderEmail(Map<String,Object> data) {
+        if (!mailEnabled) {
+            return mailDisabled();
+        }
+
         Long appointmentId = positiveLong(data.get("appointmentId"));
         Long orderId = positiveLong(data.get("orderId"));
         boolean forceResend = bool(data.get("forceResend"));
@@ -585,6 +593,10 @@ public class AdminAppointmentService {
     }
 
     public ResponseEntity<?> sendCustomAppointmentEmail(Map<String,Object> data) {
+        if (!mailEnabled) {
+            return mailDisabled();
+        }
+
         Long appointmentId = positiveLong(data.get("appointmentId"));
         String subject = str(data.get("subject"));
         String messageMd = str(data.get("message"));
@@ -638,6 +650,10 @@ public class AdminAppointmentService {
     }
 
     public ResponseEntity<?> resendConfirmationEmail(Map<String,Object> data) {
+        if (!mailEnabled) {
+            return mailDisabled();
+        }
+
         Long appointmentId = positiveLong(data.get("appointmentId"));
         boolean force = bool(data.get("forceResend"));
 
@@ -877,6 +893,10 @@ public class AdminAppointmentService {
 
     private void sendMime(String to, String subject, String text, String html, String providerEmail)
             throws Exception {
+        JavaMailSender mailer = mailerProvider.getIfAvailable();
+        if (mailer == null) {
+            throw new IllegalStateException("Aucun serveur SMTP n'est configuré.");
+        }
         MimeMessage message = mailer.createMimeMessage();
         MimeMessageHelper helper =
                 new MimeMessageHelper(message,false,StandardCharsets.UTF_8.name());
@@ -891,6 +911,13 @@ public class AdminAppointmentService {
         if (validEmail(archiveBcc) && !archiveBcc.equalsIgnoreCase(to)) helper.addBcc(archiveBcc);
 
         mailer.send(message);
+    }
+
+    private ResponseEntity<?> mailDisabled() {
+        return ResponseEntity.status(503).body(Map.of(
+                "error", "mail_disabled",
+                "message", "L'envoi d'e-mails est désactivé (MAIL_ENABLED=false)."
+        ));
     }
 
     private void saveLog(Appointment a, String to, String template, String status, Instant at) {

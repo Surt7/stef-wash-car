@@ -1,5 +1,6 @@
 package fr.stefwashcar.controller;
 
+import fr.stefwashcar.repository.FormuleRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,6 +17,9 @@ public class PublicFormulesControllerTests {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private FormuleRepository formuleRepository;
+
     @Test
     void shouldReturn200WhenGettingAllFormules() throws Exception {
         mockMvc.perform(get("/api/public/formules"))
@@ -29,5 +33,17 @@ public class PublicFormulesControllerTests {
                         "01AAAAAAAAAAAAAAAAAAAAAAAA"
                 ))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldReturnASeededFormuleWithItsLazyRelations() throws Exception {
+        String publicId = formuleRepository.findAll().getFirst().getPublicId();
+
+        mockMvc.perform(get("/api/public/formules/{publicId}", publicId))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.color.value").value("#0078D4"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.servicePublicId").isString());
     }
 }

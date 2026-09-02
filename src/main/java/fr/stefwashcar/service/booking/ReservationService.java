@@ -8,6 +8,7 @@ import fr.stefwashcar.enums.AppointmentStatus;
 import fr.stefwashcar.model.Appointment;
 import fr.stefwashcar.model.User;
 import fr.stefwashcar.repository.*;
+import fr.stefwashcar.service.availability.AvailabilityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +21,7 @@ import java.util.regex.Pattern;
 @org.springframework.stereotype.Service
 @RequiredArgsConstructor
 public class ReservationService {
-    private static final Pattern NAME = Pattern.compile("^[a-z]{2,60}$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern NAME = Pattern.compile("^[\\p{L}][\\p{L} '\u2019-]*[\\p{L}]$");
     private static final Pattern ULID = Pattern.compile("^[0-9A-HJKMNP-TV-Z]{26}$");
 
     private final AppointmentRepository appointments;
@@ -29,6 +30,7 @@ public class ReservationService {
     private final UserRepository users;
     private final EventRepository events;
     private final AppointmentConfirmationMailer confirmationMailer;
+    private final AvailabilityService availabilityService;
     private final SecureRandom random = new SecureRandom();
 
     @Transactional
@@ -40,7 +42,6 @@ public class ReservationService {
         String email = str(data.email());
         String phone = str(data.phone());
         boolean gdpr = Boolean.TRUE.equals(data.gdprConsent());
-        boolean manualOverride = Boolean.TRUE.equals(data.isManualOverride());
         String idempotencyKey = str(data.idempotencyKey());
         String eventPublicId = str(data.eventPublicId());
         String formulePublicId = str(data.formulePublicId());
@@ -70,6 +71,10 @@ public class ReservationService {
             return ResponseEntity.status(404).body(Map.of("error","event_not_found"));
         }
 
+        if (!startAtUtc.isAfter(Instant.now())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "startsAt_must_be_in_future"));
+        }
+
         var formule = formulePublicId != null ? formules.findByPublicId(formulePublicId).orElse(null) : null;
         if (formulePublicId != null) {
             if (!ULID.matcher(formulePublicId).matches()) {
@@ -78,6 +83,9 @@ public class ReservationService {
             if (formule == null) {
                 return ResponseEntity.status(404).body(Map.of("error","formule_not_found"));
             }
+            if (!formule.isActive()) {
+                return ResponseEntity.status(409).body(Map.of("error", "formule_inactive"));
+            }
             if (formule.getService() == null || !formule.getService().getId().equals(service.getId())) {
                 return ResponseEntity.badRequest().body(Map.of("error","formule_service_mismatch"));
             }
@@ -85,6 +93,17 @@ public class ReservationService {
 
         int duration = service.getDurationMin() != null ? service.getDurationMin().intValue() : 20;
         Instant endAtUtc = startAtUtc.plus(Duration.ofMinutes(duration));
+
+        if (event != null) {
+            if (event.getStartAtUtc() != null && startAtUtc.isBefore(event.getStartAtUtc())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "startsAt_outside_event"));
+            }
+            if (event.getEndAtUtc() != null && endAtUtc.isAfter(event.getEndAtUtc())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "startsAt_outside_event"));
+            }
+        } else if (!availabilityService.isBookable(service, startAtUtc)) {
+            return ResponseEntity.status(409).body(Map.of("error", "slot_not_available"));
+        }
 
         if (appointments.findBlockingConflict(service, startAtUtc, endAtUtc).isPresent()) {
             return ResponseEntity.status(409).body(Map.of("error","slot_already_booked"));
@@ -118,7 +137,8 @@ public class ReservationService {
         a.setCreatedAt(now);
         a.setCancelToken(newToken());
         a.setCancelTokenExpiresAt(startAtUtc);
-        a.setIsManualOverride(manualOverride);
+        // Une réservation publique ne peut jamais contourner les règles admin.
+        a.setIsManualOverride(false);
         a.setEvent(event);
         a.setIdempotencyKey(idempotencyKey);
 

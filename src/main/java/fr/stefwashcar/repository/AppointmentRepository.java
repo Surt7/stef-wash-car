@@ -181,21 +181,21 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
         select count(a)
         from Appointment a
         where a.status in :statuses
-          and a.service.id = 2
+          and a.service.blocksWholeDay = true
           and a.startAtUtc < :dayEndUtc
           and a.endAtUtc > :dayStartUtc
         """)
-    long countWeddingOnDay(
+    long countWholeDayBlockingOnDay(
             @Param("statuses") Set<AppointmentStatus> statuses,
             @Param("dayStartUtc") Instant dayStartUtc,
             @Param("dayEndUtc") Instant dayEndUtc
     );
 
-    default boolean hasWeddingOnDay(
+    default boolean hasWholeDayBlockingOnDay(
             Instant dayStartUtc,
             Instant dayEndUtc
     ) {
-        return countWeddingOnDay(
+        return countWholeDayBlockingOnDay(
                 BLOCKING_STATUSES,
                 dayStartUtc,
                 dayEndUtc
@@ -298,25 +298,25 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
     @Query("""
         select a from Appointment a
         where (
-              (:wedding = true and a.service.id = 2)
+              (:wholeDay = true and a.service.blocksWholeDay = true)
               or
-              (:wedding = false and a.service.id <> 2)
+              (:wholeDay = false and a.service.blocksWholeDay = false)
         )
           and a.startAtUtc < :dayEndUtc
           and a.endAtUtc > :dayStartUtc
           and a.status in :statuses
         """)
     List<Appointment> findBlockingForAvailability(
-            @Param("wedding") boolean wedding,
+            @Param("wholeDay") boolean wholeDay,
             @Param("dayStartUtc") Instant dayStartUtc,
             @Param("dayEndUtc") Instant dayEndUtc,
             @Param("statuses") Set<AppointmentStatus> statuses
     );
 
     default List<Appointment> findBlockingForAvailability(
-            boolean wedding, Instant dayStartUtc, Instant dayEndUtc) {
+            boolean wholeDay, Instant dayStartUtc, Instant dayEndUtc) {
         return findBlockingForAvailability(
-                wedding, dayStartUtc, dayEndUtc, BLOCKING_STATUSES
+                wholeDay, dayStartUtc, dayEndUtc, BLOCKING_STATUSES
         );
     }
 

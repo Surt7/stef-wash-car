@@ -61,7 +61,7 @@ public class AvailabilityService {
         Instant dayEndUtc = dayEndLocal.toInstant();
 
         List<Appointment> appointments = appointmentRepository.findBlockingForAvailability(
-                service.getId() != null && service.getId() == 2L,
+                service.isBlocksWholeDay(),
                 dayStartUtc, dayEndUtc
         );
 
@@ -89,7 +89,7 @@ public class AvailabilityService {
             occupied.put(HH_MM.format(a.getStartAtUtc().atZone(zone).toLocalTime()), true);
         }
 
-        boolean hasWeddingOnDay = appointmentRepository.hasWeddingOnDay(dayStartUtc, dayEndUtc);
+        boolean hasWholeDayBlock = appointmentRepository.hasWholeDayBlockingOnDay(dayStartUtc, dayEndUtc);
         ZonedDateTime nowLocal = ZonedDateTime.now(zone);
         boolean isToday = day.equals(nowLocal.toLocalDate());
 
@@ -118,7 +118,7 @@ public class AvailabilityService {
                 String hhmm = HH_MM.format(current.toLocalTime());
                 boolean isOccupied = Boolean.TRUE.equals(occupied.get(hhmm));
 
-                if (hasWeddingOnDay) isOccupied = true;
+                if (hasWholeDayBlock && !service.isBlocksWholeDay()) isOccupied = true;
                 if (isInBlackout(current, blackoutIntervals)) isOccupied = true;
 
                 Map<String,Object> candidate = new LinkedHashMap<>();
@@ -150,6 +150,29 @@ public class AvailabilityService {
         result.put("stepMin", effectiveStepMin != null ? effectiveStepMin : 20);
         result.put("slots", slots);
         return result;
+    }
+
+    public boolean isBookable(Service service, Instant startsAtUtc) {
+        ZoneId zone;
+        try {
+            zone = ZoneId.of(notBlank(service.getTimezone())
+                    ? service.getTimezone()
+                    : "Europe/Paris");
+        } catch (DateTimeException e) {
+            zone = ZoneId.of("Europe/Paris");
+        }
+
+        String date = startsAtUtc.atZone(zone).toLocalDate().toString();
+        Object slotsValue = getDailyAvailability(service, date, zone.getId()).get("slots");
+        if (!(slotsValue instanceof List<?> slots)) {
+            return false;
+        }
+
+        return slots.stream()
+                .filter(Map.class::isInstance)
+                .map(Map.class::cast)
+                .anyMatch(slot -> startsAtUtc.toString().equals(slot.get("startsAtUtc"))
+                        && Boolean.TRUE.equals(slot.get("available")));
     }
 
     private List<RuleWindow> loadRules(Service service, LocalDate day) {

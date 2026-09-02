@@ -3,11 +3,13 @@ package fr.stefwashcar.controller;
 import fr.stefwashcar.dto.booking.CreateReservationRequest;
 import fr.stefwashcar.dto.booking.ReservationResponse;
 import fr.stefwashcar.service.booking.ReservationService;
+import fr.stefwashcar.config.OpenApiConfig;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -51,11 +53,12 @@ public class CreateReservationController {
     }
 
     @PostMapping("/admin/reservations/override")
+    @Operation(summary = "Créer une réservation forcée (administration)")
+    @SecurityRequirement(name = OpenApiConfig.BASIC_AUTH)
     public ResponseEntity<?> overrideReservation(
             @RequestBody Map<String, Object> body,
             HttpServletRequest request
     ) {
-        // TODO security: @PreAuthorize("hasRole('ADMIN')") once Spring Security is wired.
         return reservationService.overrideReservation(body, request.getRemoteAddr());
     }
 }

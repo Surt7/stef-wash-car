@@ -6,6 +6,7 @@ import fr.stefwashcar.model.Shop;
 import fr.stefwashcar.repository.EmailLogRepository;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -26,19 +27,26 @@ public class AppointmentConfirmationMailer {
     private final EmailLogRepository emailLogs;
     private final String publicBaseUrl;
     private final String mailFrom;
+    private final boolean enabled;
 
     public AppointmentConfirmationMailer(
-            JavaMailSender mailer,
+            ObjectProvider<JavaMailSender> mailerProvider,
             EmailLogRepository emailLogs,
             @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl,
-            @Value("${app.mail.from:booking@lesphotosdemai.fr}") String mailFrom) {
-        this.mailer = mailer;
+            @Value("${app.mail.from:booking@lesphotosdemai.fr}") String mailFrom,
+            @Value("${app.mail.enabled:true}") boolean enabled) {
+        this.mailer = mailerProvider.getIfAvailable();
         this.emailLogs = emailLogs;
         this.publicBaseUrl = stripSlash(publicBaseUrl);
         this.mailFrom = mailFrom;
+        this.enabled = enabled;
     }
 
     public void send(Appointment appointment) {
+        if (!enabled) {
+            return;
+        }
+
         var user = appointment.getUser();
         var service = appointment.getService();
 
@@ -113,6 +121,12 @@ public class AppointmentConfirmationMailer {
         log.setToEmail(user.getEmail());
         log.setTemplate("appointment_confirmation");
         log.setSentAt(now);
+
+        if (mailer == null) {
+            log.setStatus("failed");
+            emailLogs.save(log);
+            return;
+        }
 
         try {
             MimeMessage message = mailer.createMimeMessage();

@@ -1,6 +1,9 @@
 package fr.stefwashcar.controller.admin;
 
+import fr.stefwashcar.config.OpenApiConfig;
 import fr.stefwashcar.service.admin.AdminAppointmentService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -20,6 +23,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
+@Tag(name = "Administration - rendez-vous")
+@SecurityRequirement(name = OpenApiConfig.BASIC_AUTH)
 public class AdminAppointmentController {
 
     private final AdminAppointmentService adminAppointmentService;

@@ -6,21 +6,25 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
 
 public record CreateReservationRequest(
         @NotNull Long serviceId,
         @NotNull Instant startsAt,
-        @NotBlank @Pattern(regexp = "^[a-zA-Z]{2,60}$") String lastName,
-        @NotBlank @Pattern(regexp = "^[a-zA-Z]{2,60}$") String firstName,
-        @NotBlank @Email String email,
-        String phone,
+        @NotBlank @Size(max = 60)
+        @Pattern(regexp = "^[\\p{L}][\\p{L} '\u2019-]*[\\p{L}]$") String lastName,
+        @NotBlank @Size(max = 60)
+        @Pattern(regexp = "^[\\p{L}][\\p{L} '\u2019-]*[\\p{L}]$") String firstName,
+        @NotBlank @Email @Size(max = 190) String email,
+        @Size(max = 30) String phone,
         @NotNull @AssertTrue Boolean gdprConsent,
-        @NotNull Boolean isManualOverride,
+        @Schema(description = "Ignoré pour une réservation publique", deprecated = true)
+        Boolean isManualOverride,
         @NotBlank @Size(max = 36) String idempotencyKey,
-        String eventPublicId,
-        String formulePublicId
+        @Pattern(regexp = "^[0-9A-HJKMNP-TV-Z]{26}$") String eventPublicId,
+        @Pattern(regexp = "^[0-9A-HJKMNP-TV-Z]{26}$") String formulePublicId
 ) {
     public CreateReservationRequest {
         lastName = trimToNull(lastName);
